@@ -56,6 +56,11 @@
       markersLayer.clearLayers();
       const res = await fetch(SHEET_GET_URL);
       const data = await res.json();
+      console.log("🟢 Podaci dohvaćeni iz sheeta:", data);
+        if (!data.success) {
+    console.error("❌ Greška u podacima:", data.error);
+    return;
+  }
       if (!data.success) return;
       data.data.forEach(item => {
         if (item.lat && item.lon) {
