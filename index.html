@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Igrališta HR karta</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; }
+    #map { height: 70vh; }
+    #panel { padding: 10px; }
+    .field { margin-bottom:8px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="panel">
+    <h3>Dodaj igralište</h3>
+    <div class="field">
+      <label>Ime: <input id="ime" /></label>
+    </div>
+    <div class="field">
+      <label>Adresa: <input id="adresa" /></label>
+      <button id="geocodeBtn">Geokodiraj</button>
+    </div>
+    <div class="field">
+      <label>Lat: <input id="lat" /></label>
+      <label>Lon: <input id="lon" /></label>
+    </div>
+    <div class="field">
+      <label>Opis: <input id="opis" /></label>
+    </div>
+    <div class="field">
+      <button id="addBtn">Spremi igralište</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // --- Konfiguracija: unesi svoj Apps Script URL ---
+    const SHEET_GET_URL = 'https://script.google.com/macros/s/AKfycbzDkXLMxKpyp50QqtjK2c4DD8DN9yh6pPuwHlOTLmeAZaNFWuZ6aZn0Uy82VCga8lmG/exec'; // GET/POST
+    // Init map
+    const map = L.map('map').setView([45.8, 16.0], 8); // centar Hrvatske
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const markersLayer = L.layerGroup().addTo(map);
+
+    // load existing points
+    async function loadPoints(){
+      markersLayer.clearLayers();
+      const res = await fetch(SHEET_GET_URL);
+      const data = await res.json();
+      if(!data.success) return;
+      data.data.forEach(item=>{
+        if(item.lat && item.lon){
+          const m = L.marker([parseFloat(item.lat), parseFloat(item.lon)]);
+          m.bindPopup(`<strong>${item.ime}</strong><br/>${item.adresa || ''}<br/>${item.opis || ''}`);
+          markersLayer.addLayer(m);
+        }
+      });
+    }
+    loadPoints();
+
+    // geocode using Nominatim (OpenStreetMap)
+    document.getElementById('geocodeBtn').addEventListener('click', async ()=>{
+      const address = document.getElementById('adresa').value;
+      if(!address) return alert('Unesi adresu');
+      const q = encodeURIComponent(address + ', Croatia');
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`;
+      const r = await fetch(url, {headers:{'Accept-Language':'hr'}});
+      const j = await r.json();
+      if(j && j.length>0){
+        const lat = j[0].lat, lon = j[0].lon;
+        document.getElementById('lat').value = lat;
+        document.getElementById('lon').value = lon;
+        map.setView([lat,lon],16);
+      } else {
+        alert('Nije pronađeno — probaj drugačije adresu');
+      }
+    });
+
+    // add new playground (POST)
+    document.getElementById('addBtn').addEventListener('click', async ()=>{
+      const ime = document.getElementById('ime').value;
+      const adresa = document.getElementById('adresa').value;
+      const lat = document.getElementById('lat').value;
+      const lon = document.getElementById('lon').value;
+      const opis = document.getElementById('opis').value;
+      if(!ime || !lat || !lon){
+        alert('Unesi ime i koordinate (ili geokodiraj adresu)');
+        return;
+      }
+      const payload = { ime, adresa, lat, lon, opis };
+      document.getElementById('msg').textContent = 'Spremam...';
+      const res = await fetch(SHEET_GET_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: {'Content-Type':'application/json'}
+      });
+      const j = await res.json();
+      if(j.success){
+        document.getElementById('msg').textContent = 'Spremljeno!';
+        loadPoints();
+      } else {
+        document.getElementById('msg').textContent = 'Greška: ' + (j.error||'');
+      }
+    });
+  </script>
+</body>
+</html>
