@@ -33,6 +33,9 @@
       <label>Opis: <input id="opis" /></label>
     </div>
     <div class="field">
+      <label>Opis: <input id="ocjena" /></label>
+    </div>
+    <div class="field">
       <button id="addBtn">Spremi igralište</button>
     </div>
     <div id="msg"></div>
@@ -40,7 +43,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const SHEET_GET_URL = 'https://script.google.com/macros/s/AKfycbySbMQAnn0cskf6gP7Z-VaMDraLx5TKNAiA9Hm1_GQRTnM2htR6hhWWdPjKnMyTioDp/exec';
+    const SHEET_GET_URL = 'https://script.google.com/macros/s/AKfycbwdBp3s-qV4DMbZRxXWOkFg4jqXrASuyeJHbRr-XfD-OPQ7x7Rkm1Xp8lorGkJa1Mfw/exec';
 
     const map = L.map('map').setView([45.8, 16.0], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -57,7 +60,7 @@
       data.data.forEach(item => {
         if (item.lat && item.lon) {
           const m = L.marker([parseFloat(item.lat), parseFloat(item.lon)]);
-          m.bindPopup(`<strong>${item.ime}</strong><br>${item.adresa || ''}<br>${item.opis || ''}`);
+          m.bindPopup(`<strong>${item.ime}</strong><br>${item.adresa || ''}<br>${item.opis || ''}<br>${item.ocjena || ''}`);
           markersLayer.addLayer(m);
         }
       });
@@ -87,9 +90,10 @@
       const lat = document.getElementById('lat').value;
       const lon = document.getElementById('lon').value;
       const opis = document.getElementById('opis').value;
+      const ocjena = document.getElementById('ocjena').value;
       if (!ime || !lat || !lon) return alert('Unesi ime i koordinate');
       document.getElementById('msg').textContent = 'Spremam...';
-      const payload = { ime, adresa, lat, lon, opis };
+      const payload = { ime, adresa, lat, lon, opis, ocjena };
       const res = await fetch(SHEET_GET_URL, {
         method: 'POST',
         body: JSON.stringify(payload),
