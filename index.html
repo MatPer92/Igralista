@@ -2,14 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Igrališta HR karta</title>
+  <title>Karta igrališta</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
-    body { margin:0; font-family: Arial, sans-serif; }
+    body { margin:0; font-family:Arial,sans-serif; background:#f6f6f6; }
     #map { height: 70vh; }
-    #panel { padding: 10px; }
+    #panel { padding: 10px; background:#fff; box-shadow:0 -2px 5px rgba(0,0,0,0.1); }
     .field { margin-bottom:8px; }
+    input { width: 90%; padding:5px; }
+    button { padding:6px 10px; }
   </style>
 </head>
 <body>
@@ -38,75 +40,67 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    // --- Konfiguracija: unesi svoj Apps Script URL ---
-    const SHEET_GET_URL = 'https://script.google.com/macros/s/AKfycbyt6lju0rE6Ri1dvDyc1EKBs1NrBgz8aAa3_UY9riyDDE6_hgoieGP_5p_X-gh2dFxy/exec'; // GET/POST
-    // Init map
-    const map = L.map('map').setView([45.8, 16.0], 8); // centar Hrvatske
+    const SHEET_GET_URL = '🔗 OVDJE_UNESI_TVOJ_WEB_APP_URL';
+
+    const map = L.map('map').setView([45.8, 16.0], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
-
     const markersLayer = L.layerGroup().addTo(map);
 
-    // load existing points
-    async function loadPoints(){
+    async function loadPoints() {
       markersLayer.clearLayers();
       const res = await fetch(SHEET_GET_URL);
       const data = await res.json();
-      if(!data.success) return;
-      data.data.forEach(item=>{
-        if(item.lat && item.lon){
+      if (!data.success) return;
+      data.data.forEach(item => {
+        if (item.lat && item.lon) {
           const m = L.marker([parseFloat(item.lat), parseFloat(item.lon)]);
-          m.bindPopup(`<strong>${item.ime}</strong><br/>${item.adresa || ''}<br/>${item.opis || ''}`);
+          m.bindPopup(`<strong>${item.ime}</strong><br>${item.adresa || ''}<br>${item.opis || ''}`);
           markersLayer.addLayer(m);
         }
       });
     }
     loadPoints();
 
-    // geocode using Nominatim (OpenStreetMap)
-    document.getElementById('geocodeBtn').addEventListener('click', async ()=>{
+    document.getElementById('geocodeBtn').addEventListener('click', async () => {
       const address = document.getElementById('adresa').value;
-      if(!address) return alert('Unesi adresu');
-      const q = encodeURIComponent(address + ', Croatia');
+      if (!address) return alert('Unesi adresu');
+      const q = encodeURIComponent(address + ', Hrvatska');
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`;
-      const r = await fetch(url, {headers:{'Accept-Language':'hr'}});
+      const r = await fetch(url, { headers: { 'Accept-Language': 'hr' } });
       const j = await r.json();
-      if(j && j.length>0){
+      if (j && j.length > 0) {
         const lat = j[0].lat, lon = j[0].lon;
         document.getElementById('lat').value = lat;
         document.getElementById('lon').value = lon;
-        map.setView([lat,lon],16);
+        map.setView([lat, lon], 16);
       } else {
-        alert('Nije pronađeno — probaj drugačije adresu');
+        alert('Adresa nije pronađena.');
       }
     });
 
-    // add new playground (POST)
-    document.getElementById('addBtn').addEventListener('click', async ()=>{
+    document.getElementById('addBtn').addEventListener('click', async () => {
       const ime = document.getElementById('ime').value;
       const adresa = document.getElementById('adresa').value;
       const lat = document.getElementById('lat').value;
       const lon = document.getElementById('lon').value;
       const opis = document.getElementById('opis').value;
-      if(!ime || !lat || !lon){
-        alert('Unesi ime i koordinate (ili geokodiraj adresu)');
-        return;
-      }
-      const payload = { ime, adresa, lat, lon, opis };
+      if (!ime || !lat || !lon) return alert('Unesi ime i koordinate');
       document.getElementById('msg').textContent = 'Spremam...';
+      const payload = { ime, adresa, lat, lon, opis };
       const res = await fetch(SHEET_GET_URL, {
         method: 'POST',
         body: JSON.stringify(payload),
-        headers: {'Content-Type':'application/json'}
+        headers: { 'Content-Type': 'application/json' }
       });
       const j = await res.json();
-      if(j.success){
-        document.getElementById('msg').textContent = 'Spremljeno!';
+      if (j.success) {
+        document.getElementById('msg').textContent = '✅ Spremljeno!';
         loadPoints();
       } else {
-        document.getElementById('msg').textContent = 'Greška: ' + (j.error||'');
+        document.getElementById('msg').textContent = '❌ Greška: ' + (j.error || '');
       }
     });
   </script>
