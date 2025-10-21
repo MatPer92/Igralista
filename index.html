@@ -95,6 +95,7 @@
       document.getElementById('msg').textContent = 'Spremam...';
       const payload = { ime, adresa, lat, lon, opis, ocjena };
       const res = await fetch(SHEET_GET_URL, {
+        redirect: 'follow',
         method: 'POST',
         body: JSON.stringify(payload),
         headers: { 'Content-Type': 'application/json' }
