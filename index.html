@@ -44,7 +44,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const SHEET_GET_URL = 'https://script.google.com/macros/s/AKfycbwsHgtobWfQE1zptztymKDfJa6LhN1lL5tFT9V8HnjMSL_vpqd2BejoIKioRNDb6g3k/exec';
+    const SHEET_GET_URL = '/.netlify/functions/sheet-proxy';
 
     const map = L.map('map').setView([45.8, 16.0], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -192,7 +192,6 @@
       const payload = { ime, adresa, lat, lon, opis, ocjena };
       try {
         const res = await fetch(SHEET_GET_URL, {
-          redirect: 'follow',
           method: 'POST',
           body: JSON.stringify(payload),
           headers: { 'Content-Type': 'application/json' }
