@@ -12,6 +12,7 @@
     .field { margin-bottom:8px; }
     input { width: 90%; padding:5px; }
     button { padding:6px 10px; }
+    #msg { margin-top:6px; color:#333; }
   </style>
 </head>
 <body>
@@ -54,21 +55,111 @@
 
     async function loadPoints() {
       markersLayer.clearLayers();
-      const res = await fetch(SHEET_GET_URL);
-      const data = await res.json();
-      console.log("🟢 Podaci dohvaćeni iz sheeta:", data);
-        if (!data.success) {
-    console.error("❌ Greška u podacima:", data.error);
-    return;
-  }
-      if (!data.success) return;
-      data.data.forEach(item => {
-        if (item.lat && item.lon) {
-          const m = L.marker([parseFloat(item.lat), parseFloat(item.lon)]);
-          m.bindPopup(`<strong>${item.ime}</strong><br>${item.adresa || ''}<br>${item.opis || ''}<br>${item.ocjena || ''}`);
-          markersLayer.addLayer(m);
+      document.getElementById('msg').textContent = 'Dohvaćam podatke...';
+      try {
+        const res = await fetch(SHEET_GET_URL);
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error('Network error fetching sheet:', res.status, txt);
+          document.getElementById('msg').textContent = 'Greška pri dohvaćanju podataka: ' + res.status;
+          return;
         }
-      });
+
+        // Try to parse JSON; if it fails, show raw text for debugging
+        let data;
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json') || contentType.includes('text/json')) {
+          data = await res.json();
+        } else {
+          // try json, but if it throws, show raw
+          try {
+            data = await res.json();
+          } catch (err) {
+            const raw = await res.text();
+            console.warn('Response is not JSON; raw response:', raw);
+            document.getElementById('msg').textContent = 'Odgovor nije JSON (provjeri endpoint). Vidi konzolu.';
+            return;
+          }
+        }
+
+        console.log("🟢 Podaci dohvaćeni iz sheeta (raw):", data);
+
+        // Support different shapes:
+        // 1) { success: true, data: [...] }
+        // 2) an array [...]
+        // 3) an object with numeric keys { "0": {...}, "1": {...} }
+        let rows = null;
+        if (Array.isArray(data.data)) {
+          rows = data.data;
+        } else if (Array.isArray(data)) {
+          rows = data;
+        } else if (data && typeof data === 'object' && Object.keys(data).length > 0 && !data.success) {
+          // fallback if API returned object-of-rows
+          rows = Object.values(data);
+        } else if (data && data.success && Array.isArray(data.rows)) {
+          rows = data.rows;
+        } else if (data && data.success && Array.isArray(data.data)) {
+          rows = data.data;
+        } else {
+          // final fallback: try to find an array property
+          const arrProp = Object.keys(data).find(k => Array.isArray(data[k]));
+          if (arrProp) rows = data[arrProp];
+        }
+
+        if (!rows || !Array.isArray(rows) || rows.length === 0) {
+          console.warn('No rows found in sheet response:', data);
+          document.getElementById('msg').textContent = 'Nema zapisa za prikaz ili neispravan odgovor (provjeri konzolu).';
+          return;
+        }
+
+        const bounds = [];
+        rows.forEach(item => {
+          // item might be an array (row values) or object with keys ime/adresa/lat/lon
+          let lat, lon, ime, adresa, opis, ocjena;
+          if (Array.isArray(item)) {
+            // try to guess columns: [ime, adresa, lat, lon, opis, ocjena]
+            ime = item[0];
+            adresa = item[1];
+            lat = item[2];
+            lon = item[3];
+            opis = item[4];
+            ocjena = item[5];
+          } else if (item && typeof item === 'object') {
+            ime = item.ime || item.name || item.naziv;
+            adresa = item.adresa || item.address;
+            lat = item.lat || item.latitude;
+            lon = item.lon || item.lng || item.longitude;
+            opis = item.opis || item.description;
+            ocjena = item.ocjena || item.rating;
+          }
+
+          const latNum = parseFloat(lat);
+          const lonNum = parseFloat(lon);
+          if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) {
+            // skip invalid coordinates
+            return;
+          }
+
+          // use circleMarker to avoid missing default icon issues
+          const m = L.circleMarker([latNum, lonNum], { radius: 6, color: '#d00', fillColor: '#f55', fillOpacity: 0.9 });
+          const popup = `<strong>${ime || 'Bez imena'}</strong><br>${adresa || ''}<br>${opis || ''}<br>${ocjena || ''}`;
+          m.bindPopup(popup);
+          markersLayer.addLayer(m);
+          bounds.push([latNum, lonNum]);
+        });
+
+        if (bounds.length > 0) {
+          const b = L.latLngBounds(bounds);
+          map.fitBounds(b.pad(0.2));
+          document.getElementById('msg').textContent = `Prikazano ${bounds.length} lokacija.`;
+        } else {
+          document.getElementById('msg').textContent = 'Nema važećih koordinata u dohvaćenim podacima.';
+        }
+
+      } catch (err) {
+        console.error('Greška pri dohvaćanju ili parsiranju podataka:', err);
+        document.getElementById('msg').textContent = 'Greška pri dohvaćanju podataka (vidi konzolu).';
+      }
     }
     loadPoints();
 
@@ -99,18 +190,23 @@
       if (!ime || !lat || !lon) return alert('Unesi ime i koordinate');
       document.getElementById('msg').textContent = 'Spremam...';
       const payload = { ime, adresa, lat, lon, opis, ocjena };
-      const res = await fetch(SHEET_GET_URL, {
-        redirect: 'follow',
-        method: 'POST',
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain' }
-      });
-      const j = await res.json();
-      if (j.success) {
-        document.getElementById('msg').textContent = '✅ Spremljeno!';
-        loadPoints();
-      } else {
-        document.getElementById('msg').textContent = '❌ Greška: ' + (j.error || '');
+      try {
+        const res = await fetch(SHEET_GET_URL, {
+          redirect: 'follow',
+          method: 'POST',
+          body: JSON.stringify(payload),
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const j = await res.json();
+        if (j.success) {
+          document.getElementById('msg').textContent = '✅ Spremljeno!';
+          loadPoints();
+        } else {
+          document.getElementById('msg').textContent = '❌ Greška: ' + (j.error || JSON.stringify(j));
+        }
+      } catch (err) {
+        console.error('Greška pri slanju:', err);
+        document.getElementById('msg').textContent = 'Greška pri slanju (vidi konzolu).';
       }
     });
   </script>
